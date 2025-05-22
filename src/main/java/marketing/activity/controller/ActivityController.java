@@ -1,10 +1,10 @@
 package marketing.activity.controller;
 
 import jakarta.validation.Valid;
-import marketing.activity.model.dto.ActivityDTO;
+import marketing.activity.model.dto.CreateActivityDTO;
 import marketing.activity.model.vo.ActivityVO;
 import marketing.activity.service.ActivityService;
-import org.springframework.beans.factory.annotation.Autowired;
+import marketing.common.Result;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -29,8 +29,8 @@ public class ActivityController {
      * @return activityVO
      */
     @PostMapping("/create")
-    public ActivityVO createActivity(@Valid @RequestBody ActivityDTO activityDTO) {
+    public Result<ActivityVO> createActivity(@Valid @RequestBody CreateActivityDTO activityDTO) {
         ActivityVO activityVO = activityService.createActivity(activityDTO);
-        return activityVO;
+        return Result.success(activityVO);
     }
 }

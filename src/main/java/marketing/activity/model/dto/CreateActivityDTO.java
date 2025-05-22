@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ActivityDTO {
+public class CreateActivityDTO {
     @NotBlank(message = "活动名称不能为空")
     private String name;
 

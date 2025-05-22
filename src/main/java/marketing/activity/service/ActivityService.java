@@ -1,6 +1,6 @@
 package marketing.activity.service;
 
-import marketing.activity.model.dto.ActivityDTO;
+import marketing.activity.model.dto.CreateActivityDTO;
 import marketing.activity.model.vo.ActivityVO;
 
 /**
@@ -14,5 +14,5 @@ public interface ActivityService {
      * @param activityDTO
      * @return activityVO
      */
-    ActivityVO createActivity(ActivityDTO activityDTO);
+    ActivityVO createActivity(CreateActivityDTO activityDTO);
 }
