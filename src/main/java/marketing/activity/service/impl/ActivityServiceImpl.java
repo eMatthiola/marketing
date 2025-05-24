@@ -1,4 +1,4 @@
-package marketing.activity.service.Impl;
+package marketing.activity.service.impl;
 
 import marketing.activity.mapper.ActivityMapper;
 import marketing.activity.model.dto.CreateActivityDTO;
@@ -28,6 +28,7 @@ public class ActivityServiceImpl implements ActivityService {
     @Override
     public ActivityVO createActivity(CreateActivityDTO activityDTO) {
         //1.DTO -> Entity
+        //todo mapstruts
         Activity activity = new Activity();
         BeanUtils.copyProperties(activityDTO, activity);
 
