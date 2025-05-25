@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="marketing.activity.mapper.ProductMapper">
+
+    <!-- 1. 扣减库存（只减库存，判断是否成功） -->
+    <update id="reduceStock" parameterType="marketing.activity.model.entity.Product">
+        UPDATE product
+        SET stock = stock - 1
+        WHERE product_id = #{productId} AND stock > 0
+    </update>
+
+    <!-- 2. 查询商品详情 -->
+    <select id="getProductById" parameterType="int" resultType="marketing.activity.model.entity.Product">
+        SELECT * FROM product WHERE product_id = #{productId}
+    </select>
+</mapper>

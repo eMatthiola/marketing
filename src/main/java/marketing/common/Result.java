@@ -34,6 +34,9 @@ public class Result<T> {
         return new Result<>(code, message, null);
     }
 
+    public static <T> Result<T> failure(String message) {
+        return new Result<>(Constants.ResultCode.FAILURE.getCode(), message, null);
+    }
 
 
 }

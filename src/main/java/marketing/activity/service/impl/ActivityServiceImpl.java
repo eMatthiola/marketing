@@ -21,6 +21,7 @@ public class ActivityServiceImpl implements ActivityService {
 
     private final ActivityMapper activityMapper;
 
+
     public ActivityServiceImpl(ActivityMapper activityMapper) {
         this.activityMapper = activityMapper;
     }
