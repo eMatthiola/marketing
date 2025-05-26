@@ -11,4 +11,12 @@ import marketing.activity.model.vo.ProductVO;
 public interface ProductService {
     //扣减库存
     ProductVO reduceStock(Long productId);
+
+    //同步库存到redis
+    void syncStockToRedis(Long productId);
+
+    //执行redis + Lua脚本扣减库存
+    boolean reduceStockWithLua(Long productId);
+
+    //todo MQ异步扣减库存
 }
