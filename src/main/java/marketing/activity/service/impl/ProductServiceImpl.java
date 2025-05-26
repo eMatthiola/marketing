@@ -1,5 +1,6 @@
 package marketing.activity.service.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import marketing.activity.mapper.ProductMapper;
 import marketing.activity.model.entity.Product;
 import marketing.activity.model.vo.ProductVO;
@@ -7,6 +8,7 @@ import marketing.activity.service.ProductService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * @ClassName ProductServicelmpl
@@ -14,19 +16,26 @@ import org.springframework.stereotype.Service;
  * @Author Matthiola
  * @Date 2025/5/25 14:12
  */
+@Slf4j
 @Service
 public class ProductServiceImpl implements ProductService {
     @Autowired
     ProductMapper productMapper;
+
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public ProductVO reduceStock(Long productId) {
+
         // 扣减库存
+        log.info("开始扣减库存，productId={}", productId);
         int result = productMapper.reduceStock(productId);
+        log.info("扣减库存操作执行结果：{}", result);
 
         // 如果扣减成功，查询商品信息
         if (result > 0) {
             // 查询商品信息
             Product product = productMapper.getProductById(productId);
+            log.info("查询商品信息结果：{}", product);
             if (product != null) {
                 // 将商品信息转换为VO对象
                 ProductVO productVO = new ProductVO();
@@ -37,6 +46,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         // 如果扣减失败或商品不存在，返回null
+        log.warn("库存扣减失败或商品不存在，productId={}", productId);
         return null;
 
     }
