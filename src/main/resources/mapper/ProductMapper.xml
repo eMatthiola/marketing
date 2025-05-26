@@ -4,14 +4,14 @@
 <mapper namespace="marketing.activity.mapper.ProductMapper">
 
     <!-- 1. 扣减库存（只减库存，判断是否成功） -->
-    <update id="reduceStock" parameterType="marketing.activity.model.entity.Product">
+    <update id="reduceStock" parameterType="java.lang.Long">
         UPDATE product
         SET stock = stock - 1
         WHERE product_id = #{productId} AND stock > 0
     </update>
 
     <!-- 2. 查询商品详情 -->
-    <select id="getProductById" parameterType="int" resultType="marketing.activity.model.entity.Product">
+    <select id="getProductById" parameterType="java.lang.Long" resultType="marketing.activity.model.entity.Product">
         SELECT * FROM product WHERE product_id = #{productId}
     </select>
 </mapper>
