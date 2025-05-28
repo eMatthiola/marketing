@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import marketing.activity.mapper.ProductMapper;
 import marketing.activity.model.entity.Product;
 import marketing.activity.model.vo.ProductVO;
+import marketing.activity.mq.producer.StockProducer;
 import marketing.activity.service.ProductService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private StockProducer stockProducer;
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -101,6 +105,11 @@ public class ProductServiceImpl implements ProductService {
         redisScript.setScriptText(script);
         redisScript.setResultType(Long.class);
         Long result = stringRedisTemplate.execute(redisScript, java.util.Collections.singletonList(key));
+
+
+        //发送kafka消息, MQ异步扣减库存
+        //todo quantity 未来可以加参数
+        stockProducer.sendStockMessage(productId, 1);
 
         //判断执行结果
         log.info("执行Lua脚本扣减库存，productId={}, result={}（1=成功，0=失败）", productId, result);

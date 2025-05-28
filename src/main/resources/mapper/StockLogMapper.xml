@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="marketing.activity.mapper.StockLogMapper">
+
+    <!-- 插入库存扣减日志 -->
+    <insert id="insert" parameterType="marketing.activity.model.entity.StockLog">
+        INSERT INTO stock_log (product_id, quantity, message_id, create_time)
+        VALUES (#{productId}, #{quantity}, #{messageId}, NOW())
+    </insert>
+
+    <!-- 查询是否存在指定 message_id（用于幂等判断） -->
+    <select id="existsByMessageId" parameterType="string" resultType="boolean">
+        SELECT COUNT(1) > 0 FROM stock_log WHERE message_id = #{messageId}
+    </select>
+
+
+</mapper>
