@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @Slf4j
-@Transactional
 public class StockConsumer {
 
     @Autowired
