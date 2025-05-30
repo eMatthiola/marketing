@@ -27,5 +27,11 @@ public class GlobalExceptionHandler {
         return Result.failure(500, "系统异常，请稍后再试");
      }
 
-
+    @ExceptionHandler(BizException.class)
+    public Result<?> handleBizException(BizException e) {
+        // 记录日志
+        // log.error("业务异常", e);
+        // 返回业务异常的错误响应
+        return Result.failure(400, e.getMessage());
+    }
 }

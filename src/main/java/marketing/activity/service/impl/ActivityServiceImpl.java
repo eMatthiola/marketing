@@ -1,11 +1,16 @@
 package marketing.activity.service.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import marketing.activity.mapper.ActivityMapper;
+import marketing.activity.mapper.ActivitySignUpMapper;
 import marketing.activity.model.dto.CreateActivityDTO;
 import marketing.activity.model.entity.Activity;
 import marketing.activity.model.vo.ActivityVO;
 import marketing.activity.service.ActivityService;
+import marketing.common.BizException;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -17,6 +22,7 @@ import java.time.LocalDateTime;
  * @Date 2025/5/21 11:44
  */
 @Service
+@Slf4j
 public class ActivityServiceImpl implements ActivityService {
 
     private final ActivityMapper activityMapper;
@@ -25,6 +31,10 @@ public class ActivityServiceImpl implements ActivityService {
     public ActivityServiceImpl(ActivityMapper activityMapper) {
         this.activityMapper = activityMapper;
     }
+
+
+    @Autowired
+    private ActivitySignUpMapper activitySignUpMapper;
 
     @Override
     public ActivityVO createActivity(CreateActivityDTO activityDTO) {
@@ -47,4 +57,27 @@ public class ActivityServiceImpl implements ActivityService {
         BeanUtils.copyProperties(activity, activityVO);
         return activityVO;
     }
+
+    @Override
+    public void activitySignUp(Long userId, Long activityId) {
+        try{
+            int insert = activitySignUpMapper.insert(userId, activityId);
+            if (insert != 1) {
+                log.info("用户{}报名活动{}失败，可能已报名或活动不存在", userId, activityId);
+                throw new BizException("报名失败，可能已报名或活动不存在");
+            }
+        } catch(DuplicateKeyException e) {
+            log.info("用户{}报名活动{}失败，已报名", userId, activityId);
+            throw new BizException("报名失败，已报名(数据库重复)");
+
+        } catch(Exception e) {
+            log.error("用户{}报名活动{}失败，异常信息：{}", userId, activityId, e);
+            throw new BizException("报名失败，运行时异常,请稍后再试");
+        }
+
+
+    }
+
+
+
 }
