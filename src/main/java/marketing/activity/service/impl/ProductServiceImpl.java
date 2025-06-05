@@ -1,11 +1,13 @@
 package marketing.activity.service.impl;
 
+import com.google.common.hash.BloomFilter;
 import lombok.extern.slf4j.Slf4j;
 import marketing.activity.mapper.ProductMapper;
 import marketing.activity.model.entity.Product;
 import marketing.activity.model.vo.ProductVO;
 import marketing.activity.mq.producer.StockProducer;
 import marketing.activity.service.IProductService;
+import marketing.activity.tools.bloomFilter.ProductBloomFilter;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -33,6 +35,9 @@ public class ProductServiceImpl implements IProductService {
 
     @Autowired
     private StockProducer stockProducer;
+
+    @Autowired
+    private ProductBloomFilter productBloomFilter;
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -126,6 +131,8 @@ public class ProductServiceImpl implements IProductService {
                         "redis.call('decrby', KEYS[1], tonumber(ARGV[1]));" +      // 扣减库存
                         "return 1;";
 
+        // ✨加这一句：主动 GET，触发 Redis 命中记录
+        stringRedisTemplate.opsForValue().get(stockKey);
 
         //3 执行Lua脚本
         DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
@@ -162,4 +169,58 @@ public class ProductServiceImpl implements IProductService {
                 return false; // 未知错误
         }
     }
+
+
+    /**
+     * 获取商品信息
+     * @param productId 商品ID
+     * @return 商品信息VO
+     */
+    @Override
+    public ProductVO getProductInfo(Long productId) {
+        //new 先用布隆过滤器拦截非法ID
+        if (!productBloomFilter.mightContain(productId)) {
+            log.warn("布隆过滤器拦截非法 productId={}", productId);
+            return null; // 返回null表示商品不存在
+        }
+
+        String productKey = "product:info:" + productId;
+
+        // 1.尝试从 Redis 获取缓存
+        Map<Object, Object> productMap = stringRedisTemplate.opsForHash().entries(productKey);
+
+        //2.命中redis缓存空值
+        if(productMap != null && productMap.containsKey("empty")) {
+            log.warn("缓存命中空值，productId={}", productId);
+            return null; // 返回null表示商品不存在
+        }
+
+        //3.如果Redis缓存未命中
+        if (productMap == null || productMap.isEmpty()) {
+            log.warn("缓存未命中，准备查库，productId={}", productId);
+
+            // 4.查询数据库，预热缓存
+            Product product = productMapper.getProductById(productId);
+            if (product != null) {
+                syncStockToRedis(productId); // 预热
+                ProductVO vo = new ProductVO();
+                BeanUtils.copyProperties(product, vo);
+                return vo;
+            }
+            // 5.如果数据库中也没有商品信息，缓存空值到redis防止缓存穿透
+            Map<String, String> emptyMap = new HashMap<>();
+            emptyMap.put("empty", "1");
+            stringRedisTemplate.opsForHash().putAll(productKey, emptyMap);
+            stringRedisTemplate.expire(productKey, 5, java.util.concurrent.TimeUnit.MINUTES); // 设置过期时间
+            log.warn("商品不存在，已缓存空值，productId={}", productId);
+
+            return null;
+        }
+
+        // 命中缓存，返回结果
+        ProductVO vo = new ProductVO();
+        vo.setProductName((String) productMap.get("name"));
+        return vo;
+    }
+
 }

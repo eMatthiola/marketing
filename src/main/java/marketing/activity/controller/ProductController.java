@@ -3,10 +3,7 @@ package marketing.activity.controller;
 import marketing.activity.model.vo.ProductVO;
 import marketing.activity.service.IProductService;
 import marketing.common.Result;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * @ClassName ProductController
@@ -67,5 +64,11 @@ public class ProductController {
         } else {
             return "库存扣减失败";
         }
+    }
+
+
+    @GetMapping("/{id}")
+    public ProductVO getProduct(@PathVariable Long id) {
+        return productService.getProductInfo(id);
     }
 }

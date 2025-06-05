@@ -2,6 +2,8 @@ package marketing.activity.mapper;
 
 import marketing.activity.model.entity.Product;
 
+import java.util.List;
+
 /**
  * @ClassName ProductMapper
  * @Description TODO
@@ -25,5 +27,7 @@ public interface ProductMapper {
      * @return 商品信息,实体类
      */
     Product getProductById(Long productId);
+
+    List<Long> getAllProductIds();
 
 }

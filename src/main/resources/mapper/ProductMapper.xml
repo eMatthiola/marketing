@@ -14,4 +14,12 @@
     <select id="getProductById" parameterType="java.lang.Long" resultType="marketing.activity.model.entity.Product">
         SELECT * FROM product WHERE product_id = #{productId}
     </select>
+
+
+    <!-- 3. 查询商品列表 -->
+    <select id="getAllProductIds" resultType="java.lang.Long">
+        SELECT product_id FROM product
+    </select>
+
+
 </mapper>

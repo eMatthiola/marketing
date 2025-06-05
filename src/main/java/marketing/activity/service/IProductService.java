@@ -18,5 +18,7 @@ public interface IProductService {
     //执行redis + Lua脚本扣减库存
     boolean reduceStockWithLua(Long productId, int quantity);
 
+    ProductVO getProductInfo(Long productId);
+
     //todo MQ异步扣减库存
 }
