@@ -1,7 +1,7 @@
 package marketing.activity.controller;
 
 import marketing.activity.model.vo.ProductVO;
-import marketing.activity.service.ProductService;
+import marketing.activity.service.IProductService;
 import marketing.common.Result;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/product")
 public class ProductController {
 
-    private final ProductService productService;
-    public ProductController(ProductService productService) {
+    private final IProductService productService;
+    public ProductController(IProductService productService) {
         this.productService = productService;
     }
 
@@ -53,14 +53,15 @@ public class ProductController {
     }
 
     /**
+     * 解决超卖问题
      * 执行Redis + Lua脚本扣减库存
      *
      * @param productId 商品ID
      * @return 是否扣减成功
      */
     @PostMapping("/reduceStockWithLua")
-    public String reduceStockWithLua(@RequestParam Long productId) {
-        boolean result = productService.reduceStockWithLua(productId);
+    public String reduceStockWithLua(@RequestParam Long productId, @RequestParam(defaultValue = "1") int quantity) {
+        boolean result = productService.reduceStockWithLua(productId, quantity);
         if (result) {
             return "扣减成功";
         } else {

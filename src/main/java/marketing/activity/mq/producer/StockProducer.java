@@ -33,6 +33,7 @@ public class StockProducer {
      *
      * 创建topic：
      * .\bin\windows\kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic lottery_invoice
+     *docker exec -it kafka kafka-topics --create --topic stock-topic --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
      *
      * 查看分区
      * cd H:\Kafka\kafka_2.13-2.8.0\bin\windows
