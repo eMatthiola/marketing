@@ -68,7 +68,7 @@ public class StockProducer {
             log.info("Sending stock message: {}", stockMessage);// 打印日志，模拟发送消息
             String json = objectMapper.writeValueAsString(stockMessage); // 将消息对象转换为JSON字符串
             // 发送消息到消息队列
-            kafkaTemplate.send("stock-topic", json); // 假设使用Kafka作为消息队列
+            kafkaTemplate.send("stock-topic", json); //
         } catch (JsonProcessingException e) {
             throw new RuntimeException("发送kafka消息失败", e);
 

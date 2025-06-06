@@ -7,7 +7,12 @@ import marketing.activity.model.entity.Product;
 import marketing.activity.model.vo.ProductVO;
 import marketing.activity.mq.producer.StockProducer;
 import marketing.activity.service.IProductService;
+import marketing.activity.service.ITtlStrategy;
 import marketing.activity.tools.bloomFilter.ProductBloomFilter;
+import marketing.common.BizException;
+import org.redisson.Redisson;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -17,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @ClassName ProductServicelmpl
@@ -38,6 +44,12 @@ public class ProductServiceImpl implements IProductService {
 
     @Autowired
     private ProductBloomFilter productBloomFilter;
+
+    @Autowired
+    private ITtlStrategy ttlStrategy;
+
+    @Autowired
+    private RedissonClient redissonClient;
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -80,19 +92,24 @@ public class ProductServiceImpl implements IProductService {
         Product product = productMapper.getProductById(productId);
         //如果商品存在
         if(product != null && product.getStock() != null) {
+            //获取动态 TTL（秒）
+            long ttlSeconds = ttlStrategy.getTtlSeconds(productId);
+
+
             //将库存信息同步到Redis
             String stockKey = "product:stock:" + productId;
             String value = String.valueOf(product.getStock());
-            stringRedisTemplate.opsForValue().set(stockKey, value);
-            log.info("同步库存到Redis成功，key={}, value={}", stockKey, value);
+            stringRedisTemplate.opsForValue().set(stockKey, value, ttlSeconds, TimeUnit.SECONDS);
+            log.info("同步库存到Redis成功，key={}, value={}", stockKey, value, ttlSeconds);
 
             // 同步商品基本信息（Hash）
             String productKey = "product:info:" + productId;
             Map<String, String> productMap = new HashMap<>();
             productMap.put("name", product.getProductName());
             //后续可以添加更多商品属性
-            stringRedisTemplate.opsForHash().putAll(productKey, productMap);
-            log.info("同步商品信息到Redis成功，key={}, value={}", productKey, productMap);
+            stringRedisTemplate.opsForHash().putAll(productKey, productMap);//
+            stringRedisTemplate.expire(productKey, ttlSeconds, TimeUnit.SECONDS);// 设置过期时间
+            log.info("同步商品信息到Redis成功，key={}, value={}", productKey, productMap, ttlSeconds);
 
         } else {
             log.warn("商品不存在或库存信息为空，productId={}", productId);
@@ -178,7 +195,17 @@ public class ProductServiceImpl implements IProductService {
      */
     @Override
     public ProductVO getProductInfo(Long productId) {
-        //new 先用布隆过滤器拦截非法ID
+        // 1. 记录访问行为，用于动态 TTL 策略判断商品热度
+        try {
+            stringRedisTemplate.opsForValue().increment("product:access:" + productId);
+            // 设置过期时间为1小时，形成滑动窗口统计（可选）
+            stringRedisTemplate.expire("product:access:" + productId, 1, TimeUnit.HOURS);
+        } catch (Exception e) {
+            log.warn("商品访问计数失败，productId={}", productId, e);
+        }
+
+
+        //2. 先用布隆过滤器拦截非法ID
         if (!productBloomFilter.mightContain(productId)) {
             log.warn("布隆过滤器拦截非法 productId={}", productId);
             return null; // 返回null表示商品不存在
@@ -186,41 +213,83 @@ public class ProductServiceImpl implements IProductService {
 
         String productKey = "product:info:" + productId;
 
-        // 1.尝试从 Redis 获取缓存
+        // 3.尝试从 Redis 获取缓存
         Map<Object, Object> productMap = stringRedisTemplate.opsForHash().entries(productKey);
 
-        //2.命中redis缓存空值
-        if(productMap != null && productMap.containsKey("empty")) {
+        //3.1.命中redis空值
+        if (productMap != null && productMap.containsKey("empty")) {
             log.warn("缓存命中空值，productId={}", productId);
             return null; // 返回null表示商品不存在
         }
-
-        //3.如果Redis缓存未命中
-        if (productMap == null || productMap.isEmpty()) {
-            log.warn("缓存未命中，准备查库，productId={}", productId);
-
-            // 4.查询数据库，预热缓存
-            Product product = productMapper.getProductById(productId);
-            if (product != null) {
-                syncStockToRedis(productId); // 预热
-                ProductVO vo = new ProductVO();
-                BeanUtils.copyProperties(product, vo);
-                return vo;
-            }
-            // 5.如果数据库中也没有商品信息，缓存空值到redis防止缓存穿透
-            Map<String, String> emptyMap = new HashMap<>();
-            emptyMap.put("empty", "1");
-            stringRedisTemplate.opsForHash().putAll(productKey, emptyMap);
-            stringRedisTemplate.expire(productKey, 5, java.util.concurrent.TimeUnit.MINUTES); // 设置过期时间
-            log.warn("商品不存在，已缓存空值，productId={}", productId);
-
-            return null;
+        //3.2.命中redis缓存
+        if (productMap != null && !productMap.isEmpty()) {
+            log.info("缓存命中，productId={}", productId);
+            ProductVO vo = new ProductVO();
+            vo.setProductName((String) productMap.get("name"));
+            return vo; // 返回缓存中的商品信息
         }
 
-        // 命中缓存，返回结果
-        ProductVO vo = new ProductVO();
-        vo.setProductName((String) productMap.get("name"));
-        return vo;
-    }
+        //4.如果未命中Redis缓存, 尝试 Redisson 分布式加锁
+        String lockKey = "lock:product:" + productId;
+        RLock lock = redissonClient.getLock(lockKey);
 
+        try {
+            if (lock.tryLock(0, 5, TimeUnit.SECONDS)) {
+                // 成功获取锁，继续处理
+                log.info("获取到分布式锁，productId={}", productId);
+                try {
+                    // 双重检查缓存，防止重复加载
+                    productMap = stringRedisTemplate.opsForHash().entries(productKey);
+                    if (productMap != null && !productMap.isEmpty()) {
+                        log.info("缓存命中，productId={}", productId);
+                        ProductVO vo = new ProductVO();
+                        vo.setProductName((String) productMap.get("name"));
+                        return vo; // 返回缓存中的商品信息
+                    }
+
+                    // 5.查询数据库，预热缓存
+                    Product product = productMapper.getProductById(productId);
+                    if (product != null) {
+                        syncStockToRedis(productId); // 预热
+                        ProductVO vo = new ProductVO();
+                        BeanUtils.copyProperties(product, vo);
+                        return vo;
+                    }
+
+                    // 6.如果数据库中也没有商品信息，缓存空值到redis防止缓存穿透
+                    Map<String, String> emptyMap = new HashMap<>();
+                    emptyMap.put("empty", "1");
+                    stringRedisTemplate.opsForHash().putAll(productKey, emptyMap);
+                    stringRedisTemplate.expire(productKey, 5, java.util.concurrent.TimeUnit.MINUTES); // 设置过期时间
+                    log.warn("商品不存在，已缓存空值，productId={}", productId);
+                    return null; // 返回null表示商品不存在
+                } finally {
+                    if (lock != null && lock.isHeldByCurrentThread()) {
+                        lock.unlock(); // 释放锁
+                        log.info("释放分布式锁，productId={}", productId);
+                    } else {
+                        log.warn("尝试释放未持有的锁，productId={}", productId);
+                    }
+                }
+            } else {
+                log.warn("获取分布式锁失败，可能其他线程正在处理，productId={}", productId);
+                // 如果获取锁失败，可以选择重试然后兜底逻辑
+                Thread.sleep(100); // 等待一段时间后重试
+                Map<Object, Object> cache = stringRedisTemplate.opsForHash().entries(productKey);
+                if (cache != null && !cache.isEmpty()) {
+                    log.info("重试获取缓存命中，productId={}", productId);
+                    ProductVO vo = new ProductVO();
+                    vo.setProductName((String) cache.get("name"));
+                    return vo; // 返回缓存中的商品信息
+                }
+                // 兜底逻辑：仍然未命中缓存
+                log.error("等待后仍未命中缓存，降级返回，productId={}", productId);
+                throw new BizException("系统繁忙，请稍后再试"); // 或返回 null/默认值
+            }
+        } catch (Exception e) {
+            log.error("获取商品信息异常，productId={}", productId, e);
+        }
+
+        return null;
+    }
 }
